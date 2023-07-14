@@ -2,8 +2,7 @@ package com.janbabak.lambda.api;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
-import com.amazonaws.services.dynamodbv2.document.DynamoDB;
-import com.amazonaws.services.dynamodbv2.document.Item;
+import com.amazonaws.services.dynamodbv2.document.*;
 import com.amazonaws.services.dynamodbv2.document.spec.PutItemSpec;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestStreamHandler;
@@ -13,11 +12,24 @@ import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
 import java.io.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 
 public class ProductLambdaHandler implements RequestStreamHandler {
 
     private final String DYNAMO_TABLE = "Products";
+    private final AmazonDynamoDB client;
+    private final DynamoDB dynamoDB;
+    private final Table productsTable;
+
+    public ProductLambdaHandler() {
+        client = AmazonDynamoDBClientBuilder.defaultClient();
+        dynamoDB = new DynamoDB(client);
+        productsTable = dynamoDB.getTable(DYNAMO_TABLE);
+    }
+
     /**
      * Get product by id (path parameter or query string parameter)
      * @param inputStream .
@@ -33,9 +45,6 @@ public class ProductLambdaHandler implements RequestStreamHandler {
         JSONObject responseObject = new JSONObject();
         JSONObject responseBody = new JSONObject();
 
-        AmazonDynamoDB client = AmazonDynamoDBClientBuilder.defaultClient();
-        DynamoDB dynamoDB = new DynamoDB(client);
-
         int id;
         Item resItem = null;
         try {
@@ -46,7 +55,7 @@ public class ProductLambdaHandler implements RequestStreamHandler {
                 JSONObject pps = (JSONObject) reqObject.get("pathParameters");
                 if (pps.get("id") != null) {
                     id = Integer.parseInt((String) pps.get("id"));
-                    resItem = dynamoDB.getTable(DYNAMO_TABLE).getItem("id", id);
+                    resItem = productsTable.getItem("id", id);
                 }
             }
             // query string parameters
@@ -54,7 +63,7 @@ public class ProductLambdaHandler implements RequestStreamHandler {
                 JSONObject qps = (JSONObject) reqObject.get("queryStringParameters");
                 if (qps.get("id") != null) {
                     id = Integer.parseInt((String) qps.get("id"));
-                    resItem = dynamoDB.getTable(DYNAMO_TABLE).getItem("id", id);
+                    resItem = productsTable.getItem("id", id);
                 }
             }
 
@@ -78,6 +87,37 @@ public class ProductLambdaHandler implements RequestStreamHandler {
     }
 
     /**
+     * Get all products
+     * @param inputStream .
+     * @param outputStream .
+     * @param context .
+     * @throws IOException .
+     */
+    public void handleGetAllRequest(InputStream inputStream, OutputStream outputStream, Context context) throws IOException {
+        OutputStreamWriter writer = new OutputStreamWriter(outputStream);
+        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+        JSONParser parser = new JSONParser();
+        JSONObject responseObject = new JSONObject();
+        JSONObject responseBody = new JSONObject();
+
+        ItemCollection<ScanOutcome> productItems = productsTable.scan();
+        Iterator<Item> itemIterator = productItems.iterator();
+        List<Product> products = new ArrayList<>();
+        while (itemIterator.hasNext()) {
+            Product product = new Product(itemIterator.next().toJSON());
+            products.add(product);
+        }
+
+        responseBody.put("products", products);
+        responseBody.put("statusCode", 200);
+        responseObject.put("body", responseBody.toString());
+
+        writer.write(responseObject.toJSONString());
+        reader.close();
+        writer.close();
+    }
+
+    /**
      * Create or update product.
      * @param inputStream .
      * @param outputStream .
@@ -91,16 +131,13 @@ public class ProductLambdaHandler implements RequestStreamHandler {
         JSONObject responseObject = new JSONObject();
         JSONObject responseBody = new JSONObject();
 
-        AmazonDynamoDB client = AmazonDynamoDBClientBuilder.defaultClient();
-        DynamoDB dynamoDB = new DynamoDB(client);
-
         try {
             JSONObject reqObject = (JSONObject) parser.parse(reader);
 
             if (reqObject.get("body") != null) {
                 Product product = new Product((String) reqObject.get("body"));
 
-                dynamoDB.getTable(DYNAMO_TABLE)
+                productsTable
                         .putItem(new PutItemSpec().withItem(
                                         new Item()
                                                 .withNumber("id", product.getId())
@@ -123,10 +160,10 @@ public class ProductLambdaHandler implements RequestStreamHandler {
 
     /**
      * Delete item by id (path parameter)
-     * @param inputStream
-     * @param outputStream
-     * @param context
-     * @throws IOException
+     * @param inputStream .
+     * @param outputStream .
+     * @param context .
+     * @throws IOException .
      */
     public void handleDeleteRequest(InputStream inputStream, OutputStream outputStream, Context context) throws IOException {
         OutputStreamWriter writer = new OutputStreamWriter(outputStream);
@@ -135,23 +172,19 @@ public class ProductLambdaHandler implements RequestStreamHandler {
         JSONObject responseObject = new JSONObject();
         JSONObject responseBody = new JSONObject();
 
-        AmazonDynamoDB client = AmazonDynamoDBClientBuilder.defaultClient();
-        DynamoDB dynamoDB = new DynamoDB(client);
-
         try {
             JSONObject reqObject = (JSONObject) parser.parse(reader);
 
             if (reqObject.get("pathParameters") != null) {
                 JSONObject pps = (JSONObject) reqObject.get("pathParameters");
-
                 if (pps.get("id") != null) {
                     int id = Integer.parseInt((String) pps.get("id"));
-                    dynamoDB.getTable(DYNAMO_TABLE).deleteItem("id", id);
+                    productsTable.deleteItem("id", id);
                 }
             }
 
             responseBody.put("message", "Item deleted");
-            responseObject.put("statusCode", 200);
+            responseObject.put("statusCode", 201);
             responseObject.put("body", responseBody.toString());
         } catch (ParseException e) {
             responseBody.put("message", "No items found");
