@@ -1,0 +1,4 @@
+GET https://md9ihrcr6d.execute-api.eu-north-1.amazonaws.com/test/products
+Accept: application/json
+
+###

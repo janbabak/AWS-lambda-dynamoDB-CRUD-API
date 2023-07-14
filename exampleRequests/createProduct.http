@@ -1,0 +1,11 @@
+PUT https://md9ihrcr6d.execute-api.eu-north-1.amazonaws.com/test/products
+Accept: application/json
+Content-Type: application/json
+
+{
+  "id": 4,
+  "name": "apple",
+  "price": 2.50
+}
+
+###

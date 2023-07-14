@@ -1,0 +1,4 @@
+DELETE https://md9ihrcr6d.execute-api.eu-north-1.amazonaws.com/test/products/4
+Accept: application/json
+
+###
