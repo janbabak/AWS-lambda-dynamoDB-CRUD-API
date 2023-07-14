@@ -17,13 +17,13 @@ import java.io.*;
 
 public class ProductLambdaHandler implements RequestStreamHandler {
 
-    private String DYNAMO_TABLE = "Products";
+    private final String DYNAMO_TABLE = "Products";
     /**
      * Get product by id (path parameter or query string parameter)
-     * @param inputStream
-     * @param outputStream
-     * @param context
-     * @throws IOException
+     * @param inputStream .
+     * @param outputStream .
+     * @param context .
+     * @throws IOException .
      */
     @Override
     public void handleRequest(InputStream inputStream, OutputStream outputStream, Context context) throws IOException {
@@ -79,10 +79,10 @@ public class ProductLambdaHandler implements RequestStreamHandler {
 
     /**
      * Create or update product.
-     * @param inputStream
-     * @param outputStream
-     * @param context
-     * @throws IOException
+     * @param inputStream .
+     * @param outputStream .
+     * @param context .
+     * @throws IOException .
      */
     public void handlePutRequest(InputStream inputStream, OutputStream outputStream, Context context) throws IOException {
         OutputStreamWriter writer = new OutputStreamWriter(outputStream);
@@ -121,4 +121,44 @@ public class ProductLambdaHandler implements RequestStreamHandler {
         writer.close();
     }
 
+    /**
+     * Delete item by id (path parameter)
+     * @param inputStream
+     * @param outputStream
+     * @param context
+     * @throws IOException
+     */
+    public void handleDeleteRequest(InputStream inputStream, OutputStream outputStream, Context context) throws IOException {
+        OutputStreamWriter writer = new OutputStreamWriter(outputStream);
+        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+        JSONParser parser = new JSONParser();
+        JSONObject responseObject = new JSONObject();
+        JSONObject responseBody = new JSONObject();
+
+        AmazonDynamoDB client = AmazonDynamoDBClientBuilder.defaultClient();
+        DynamoDB dynamoDB = new DynamoDB(client);
+
+        try {
+            JSONObject reqObject = (JSONObject) parser.parse(reader);
+
+            if (reqObject.get("pathParameters") != null) {
+                JSONObject pps = (JSONObject) reqObject.get("pathParameters");
+
+                if (pps.get("id") != null) {
+                    int id = Integer.parseInt((String) pps.get("id"));
+                    dynamoDB.getTable(DYNAMO_TABLE).deleteItem("id", id);
+                }
+            }
+
+            responseBody.put("message", "Item deleted");
+            responseObject.put("statusCode", 200);
+            responseObject.put("body", responseBody.toString());
+        } catch (ParseException e) {
+            responseBody.put("message", "No items found");
+            responseBody.put("statusCode", 404);
+        }
+        writer.write(responseObject.toJSONString());
+        reader.close();
+        writer.close();
+    }
 }
